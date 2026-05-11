@@ -1,0 +1,14 @@
+{
+  "name": "network-monitor-server",
+  "version": "1.0.0",
+  "description": "Central server for distributed network monitor",
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "ws": "^8.18.0"
+  }
+}

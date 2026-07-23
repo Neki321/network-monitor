@@ -1,6 +1,7 @@
 const express = require("express");
 const http = require("http");
 const { WebSocketServer } = require("ws");
+const path = require("path");
 
 const PORT = Number(process.env.PORT || 4000);
 const HISTORY_LIMIT = 60;
@@ -14,6 +15,7 @@ const ADMIN_USER = {
 
 const app = express();
 const server = http.createServer(app);
+
 app.use(express.json());
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
@@ -51,6 +53,8 @@ function ensureMinMaxEntry(nodeId) {
       ramMax: null,
       diskMin: null,
       diskMax: null,
+      gpuMin: null,
+      gpuMax: null,
     });
   }
   return nodeMetricsMinMax.get(nodeId);
@@ -58,6 +62,7 @@ function ensureMinMaxEntry(nodeId) {
 
 function updateMinMaxForReading(nodeId, reading) {
   const mm = ensureMinMaxEntry(nodeId);
+
   const apply = (key, minKey, maxKey) => {
     const v = reading[key];
     if (!Number.isFinite(v)) {
@@ -71,14 +76,17 @@ function updateMinMaxForReading(nodeId, reading) {
     mm[minKey] = Math.min(mm[minKey], v);
     mm[maxKey] = Math.max(mm[maxKey], v);
   };
+
   apply("cpu", "cpuMin", "cpuMax");
   apply("ram", "ramMin", "ramMax");
   apply("disk", "diskMin", "diskMax");
+  apply("gpu", "gpuMin", "gpuMax");
 }
 
 function toNodeResponse(nodeState) {
   const mm = nodeMetricsMinMax.get(nodeState.nodeId) || {};
   const alias = nodeAliases.has(nodeState.nodeId) ? nodeAliases.get(nodeState.nodeId) : null;
+
   return {
     nodeId: nodeState.nodeId,
     hostname: nodeState.hostname,
@@ -89,6 +97,8 @@ function toNodeResponse(nodeState) {
     ramMax: mm.ramMax ?? null,
     diskMin: mm.diskMin ?? null,
     diskMax: mm.diskMax ?? null,
+    gpuMin: mm.gpuMin ?? null,
+    gpuMax: mm.gpuMax ?? null,
     online: Date.now() - nodeState.lastSeenMs <= OFFLINE_AFTER_MS,
     lastSeen: new Date(nodeState.lastSeenMs).toISOString(),
     firstSeen: new Date(nodeState.firstSeenMs).toISOString(),
@@ -99,7 +109,9 @@ function toNodeResponse(nodeState) {
 function buildNodesPayloadForClient(client) {
   const isAdmin = client._role === "admin";
   const guestHostname = (client._guestHostname || "").trim();
+
   let nodes = Array.from(nodeStore.values()).map(toNodeResponse);
+
   if (!isAdmin) {
     if (!guestHostname) {
       nodes = [];
@@ -111,6 +123,7 @@ function buildNodesPayloadForClient(client) {
       });
     }
   }
+
   return {
     type: "nodes:update",
     data: nodes,
@@ -145,6 +158,7 @@ function upsertNodeReading(reading) {
     };
 
   const net = reading.network && typeof reading.network === "object" ? reading.network : {};
+
   const normalizedReading = {
     nodeId: safeNodeId,
     hostname: reading.hostname || existing.hostname || safeNodeId,
@@ -166,6 +180,7 @@ function upsertNodeReading(reading) {
   existing.lastSeenMs = nowMs;
   existing.lastReading = normalizedReading;
   existing.history.push(normalizedReading);
+
   if (existing.history.length > HISTORY_LIMIT) {
     existing.history = existing.history.slice(-HISTORY_LIMIT);
   }
@@ -248,16 +263,20 @@ wss.on("connection", (socket, request) => {
         if (msg.type !== "setAlias" || socket._role !== "admin") {
           return;
         }
+
         const nodeId = String(msg.nodeId || "").trim();
         const alias = String(msg.alias || "").trim();
+
         if (!nodeId) {
           return;
         }
+
         if (alias) {
           nodeAliases.set(nodeId, alias);
         } else {
           nodeAliases.delete(nodeId);
         }
+
         broadcastToDashboards();
       } catch (error) {
         console.error("Invalid dashboard message:", error.message);
@@ -267,6 +286,7 @@ wss.on("connection", (socket, request) => {
     socket.on("close", () => {
       dashboardClients.delete(socket);
     });
+
     return;
   }
 
@@ -277,10 +297,9 @@ setInterval(() => {
   broadcastToDashboards();
 }, 2_000);
 
-const path = require('path');
-app.use(express.static(path.join(__dirname, '../../frontend/dist')));
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '../../frontend/dist/index.html'));
+app.use(express.static(path.join(__dirname, "../../frontend/dist")));
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "../../frontend/dist/index.html"));
 });
 
 server.listen(PORT, () => {

@@ -23,12 +23,18 @@ export function StatsPage({ role, theme, onToggleTheme, nodes, historyMap }: Sta
     const history = node.history ?? historyMap[node.nodeId] ?? [];
     const cpu = history.map((item) => item.cpu);
     const ram = history.map((item) => item.ram);
+    const gpu = history
+      .map((item) => item.gpu)
+      .filter((g): g is number => g !== null && g !== undefined && Number.isFinite(g));
     return {
+      nodeId: node.nodeId,
       hostname: node.hostname,
       cpuAvg: avg(cpu),
       cpuMax: cpu.length ? Math.max(...cpu) : 0,
       ramAvg: avg(ram),
       ramMax: ram.length ? Math.max(...ram) : 0,
+      gpuAvg: gpu.length ? avg(gpu) : null,
+      gpuMax: gpu.length ? Math.max(...gpu) : null,
     };
   });
 
@@ -64,16 +70,20 @@ export function StatsPage({ role, theme, onToggleTheme, nodes, historyMap }: Sta
                 <th>{t.maxCpu}</th>
                 <th>{t.avgRam}</th>
                 <th>{t.maxRam}</th>
+                <th>{t.avgGpu}</th>
+                <th>{t.maxGpu}</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((row) => (
-                <tr key={row.hostname}>
+                <tr key={row.nodeId}>
                   <td>{row.hostname}</td>
                   <td>{row.cpuAvg.toFixed(1)}%</td>
                   <td>{row.cpuMax.toFixed(1)}%</td>
                   <td>{row.ramAvg.toFixed(1)}%</td>
                   <td>{row.ramMax.toFixed(1)}%</td>
+                  <td>{row.gpuAvg != null ? `${row.gpuAvg.toFixed(1)}%` : "—"}</td>
+                  <td>{row.gpuMax != null ? `${row.gpuMax.toFixed(1)}%` : "—"}</td>
                 </tr>
               ))}
             </tbody>

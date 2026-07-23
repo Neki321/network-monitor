@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { LanguageProvider, useLanguage } from "./context/LanguageContext";
 import { useWebSocket } from "./hooks/useWebSocket";
@@ -15,18 +15,29 @@ export type AlertEntry = {
   timestamp: string;
 };
 
-const getWsUrl = (token: string, role: "admin" | "guest", guestHostname: string) => {
+const getWsUrl = (
+  token: string,
+  role: "admin" | "guest",
+  guestHostname: string
+) => {
   const isLocal =
     window.location.hostname === "localhost" ||
     window.location.hostname === "127.0.0.1";
+
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   const host = isLocal ? "localhost:4000" : window.location.host;
   const params = new URLSearchParams();
-  params.set("token", token);
-  params.set("role", role);
-  if (role === "guest" && guestHostname.trim()) {
-    params.set("hostname", guestHostname.trim());
+
+  if (role === "admin") {
+    params.set("token", token);
+    params.set("role", "admin");
+  } else {
+    params.set("role", "guest");
+    if (guestHostname.trim()) {
+      params.set("hostname", guestHostname.trim());
+    }
   }
+
   return `${protocol}//${host}/dashboard?${params.toString()}`;
 };
 
@@ -50,10 +61,11 @@ function AppContent() {
   const handleAdminLogin = (adminToken: string) => {
     setToken(adminToken);
     setRole("admin");
+    setGuestHostname("");
   };
 
   const handleGuestLogin = (hostname: string) => {
-    setToken("guest");
+    setToken("guest-read-only");
     setRole("guest");
     setGuestHostname(hostname.trim());
   };
@@ -84,11 +96,15 @@ function AppContent() {
     setAlerts((prev) => [alert, ...prev].slice(0, 100));
   };
 
+  const wsUrl = useMemo(() => {
+    if (!token || !role) return "";
+    return getWsUrl(token, role, guestHostname);
+  }, [token, role, guestHostname]);
+
   return token && role ? (
     <AuthenticatedRoutes
       role={role}
-      token={token}
-      guestHostname={guestHostname}
+      wsUrl={wsUrl}
       theme={theme}
       onToggleTheme={toggleTheme}
       onLogout={handleLogout}
@@ -102,7 +118,10 @@ function AppContent() {
       <Route
         path="/login"
         element={
-          <LoginPage onAdminLogin={handleAdminLogin} onGuestLogin={handleGuestLogin} />
+          <LoginPage
+            onAdminLogin={handleAdminLogin}
+            onGuestLogin={handleGuestLogin}
+          />
         }
       />
       <Route path="*" element={<Navigate to="/login" replace />} />
@@ -112,8 +131,7 @@ function AppContent() {
 
 type AuthenticatedRoutesProps = {
   role: "admin" | "guest";
-  token: string;
-  guestHostname: string;
+  wsUrl: string;
   theme: "dark" | "light";
   onToggleTheme: () => void;
   onLogout: () => void;
@@ -125,8 +143,7 @@ type AuthenticatedRoutesProps = {
 
 function AuthenticatedRoutes({
   role,
-  token,
-  guestHostname,
+  wsUrl,
   theme,
   onToggleTheme,
   onLogout,
@@ -135,9 +152,7 @@ function AuthenticatedRoutes({
   viewMode,
   onViewModeChange,
 }: AuthenticatedRoutesProps) {
-  const { connected, nodes, historyMap, fetchNodeHistory, sendJson } = useWebSocket(
-    getWsUrl(token, role, guestHostname)
-  );
+  const { connected, nodes, historyMap, fetchNodeHistory, sendJson } = useWebSocket(wsUrl);
 
   return (
     <Routes>

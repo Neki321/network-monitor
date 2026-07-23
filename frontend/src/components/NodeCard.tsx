@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 import type { NodeReading, NodeState } from "../hooks/useWebSocket";
 import { ResourceChart } from "./ResourceChart";
 import { useLanguage } from "../context/LanguageContext";
@@ -41,19 +42,54 @@ export function NodeCard({ node, history, onClick, role, sendJson }: NodeCardPro
 
   const displayName = node.alias?.trim() ? node.alias.trim() : node.hostname;
 
+  const [aliasEditing, setAliasEditing] = useState(false);
+  const [aliasDraft, setAliasDraft] = useState("");
+  const aliasInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!aliasEditing) return;
+    aliasInputRef.current?.focus();
+    aliasInputRef.current?.select();
+  }, [aliasEditing]);
+
+  useEffect(() => {
+    setAliasEditing(false);
+  }, [node.nodeId]);
+
   const lastUpdateTime = reading
     ? new Date(reading.timestamp).toLocaleTimeString(language === "UA" ? "uk-UA" : "en-GB", {
         hour12: false,
       })
     : "--:--:--";
 
-  const onRenameClick = (event: React.MouseEvent) => {
+  const beginAliasEdit = (event: MouseEvent) => {
     event.stopPropagation();
     if (role !== "admin") return;
-    const initial = node.alias?.trim() || node.hostname;
-    const next = window.prompt(t.renameNode, initial);
-    if (next === null) return;
-    sendJson({ type: "setAlias", nodeId: node.nodeId, alias: next.trim() });
+    setAliasDraft(node.alias?.trim() || node.hostname);
+    setAliasEditing(true);
+  };
+
+  const cancelAliasEdit = (event: MouseEvent) => {
+    event.stopPropagation();
+    setAliasEditing(false);
+  };
+
+  const confirmAliasEdit = (event?: MouseEvent) => {
+    event?.stopPropagation();
+    if (role !== "admin") return;
+    sendJson({ type: "setAlias", nodeId: node.nodeId, alias: aliasDraft.trim() });
+    setAliasEditing(false);
+  };
+
+  const onAliasKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    event.stopPropagation();
+    if (event.key === "Enter") {
+      event.preventDefault();
+      confirmAliasEdit();
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      setAliasEditing(false);
+    }
   };
 
   const net = reading?.network ?? { up: 0, down: 0 };
@@ -62,14 +98,56 @@ export function NodeCard({ node, history, onClick, role, sendJson }: NodeCardPro
   const cpuRange = formatMinMaxLine(node.cpuMin, node.cpuMax, t.minShort, t.maxShort);
   const ramRange = formatMinMaxLine(node.ramMin, node.ramMax, t.minShort, t.maxShort);
   const diskRange = formatMinMaxLine(node.diskMin, node.diskMax, t.minShort, t.maxShort);
+  const gpuRange = formatMinMaxLine(node.gpuMin, node.gpuMax, t.minShort, t.maxShort);
+
+  const gpuPct =
+    reading && reading.gpu !== null && reading.gpu !== undefined && Number.isFinite(reading.gpu)
+      ? reading.gpu
+      : null;
+
+  const showGpuChart =
+    gpuPct !== null ||
+    history.some((h) => h.gpu !== null && h.gpu !== undefined && Number.isFinite(h.gpu));
 
   return (
     <article className={`node-card ${isAlert ? "alert pulse" : ""}`} onClick={onClick}>
       <header className="node-card-header">
         {role === "admin" ? (
-          <button type="button" className="node-title-button" onClick={onRenameClick}>
-            {displayName}
-          </button>
+          aliasEditing ? (
+            <div className="node-alias-editor" onClick={(e) => e.stopPropagation()}>
+              <input
+                ref={aliasInputRef}
+                type="text"
+                className="node-alias-input"
+                value={aliasDraft}
+                onChange={(e) => setAliasDraft(e.target.value)}
+                onKeyDown={onAliasKeyDown}
+                aria-label={t.renameNode}
+              />
+              <button
+                type="button"
+                className="node-alias-icon-btn"
+                onClick={confirmAliasEdit}
+                aria-label={t.saveAlias}
+                title={t.saveAlias}
+              >
+                ✓
+              </button>
+              <button
+                type="button"
+                className="node-alias-icon-btn"
+                onClick={cancelAliasEdit}
+                aria-label={t.close}
+                title={t.close}
+              >
+                ✕
+              </button>
+            </div>
+          ) : (
+            <button type="button" className="node-title-button" onClick={beginAliasEdit}>
+              {displayName}
+            </button>
+          )
         ) : (
           <h3 className="node-title-text">{displayName}</h3>
         )}
@@ -91,6 +169,7 @@ export function NodeCard({ node, history, onClick, role, sendJson }: NodeCardPro
               </div>
               {cpuRange ? <p className="metric-minmax">{cpuRange}</p> : null}
             </div>
+
             <div className="metric-block">
               <div className="metric-row">
                 <span>{t.ram}</span>
@@ -101,6 +180,7 @@ export function NodeCard({ node, history, onClick, role, sendJson }: NodeCardPro
               </div>
               {ramRange ? <p className="metric-minmax">{ramRange}</p> : null}
             </div>
+
             <div className="metric-block">
               <div className="metric-row">
                 <span>{t.disk}</span>
@@ -111,22 +191,64 @@ export function NodeCard({ node, history, onClick, role, sendJson }: NodeCardPro
               </div>
               {diskRange ? <p className="metric-minmax">{diskRange}</p> : null}
             </div>
+
+            {gpuPct !== null ? (
+              <div className="metric-block">
+                <div className="metric-row">
+                  <span>{t.gpu}</span>
+                  <strong>{formatPercent(gpuPct)}</strong>
+                  <div className="progress">
+                    <div
+                      className={`progress-fill ${getBarClass(gpuPct)}`}
+                      style={{ width: `${gpuPct}%` }}
+                    />
+                  </div>
+                </div>
+                {gpuRange ? <p className="metric-minmax">{gpuRange}</p> : null}
+                {reading.gpuTemp !== null &&
+                reading.gpuTemp !== undefined &&
+                Number.isFinite(reading.gpuTemp) ? (
+                  <p className="metric-gpu-temp">
+                    {t.temp}: {Math.round(reading.gpuTemp)}°C
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
           </div>
-          {reading.gpu != null && Number.isFinite(reading.gpu) ? (
-            <p className="metric-extra">
-              {t.gpu}: {Math.round(reading.gpu)}%
-              {reading.gpuTemp != null && Number.isFinite(reading.gpuTemp)
-                ? ` | ${t.temp}: ${Math.round(reading.gpuTemp)}°C`
-                : null}
-            </p>
-          ) : null}
-          <p className="metric-extra">
-            ↑ {fmtKb(net.up)} KB/s &nbsp; ↓ {fmtKb(net.down)} KB/s
-          </p>
+
+          <div className="network-block" aria-label={t.netThroughput}>
+            <div className="network-line">
+              <span className="network-line-start">
+                <span className="network-arrow" aria-hidden>
+                  ↑
+                </span>
+                <span className="network-label">{t.netUpload}</span>
+              </span>
+              <span className="network-value-wrap">
+                <span className="network-num">{fmtKb(net.up)}</span>
+                <span className="network-unit">KB/s</span>
+              </span>
+            </div>
+
+            <div className="network-line">
+              <span className="network-line-start">
+                <span className="network-arrow" aria-hidden>
+                  ↓
+                </span>
+                <span className="network-label">{t.netDownload}</span>
+              </span>
+              <span className="network-value-wrap">
+                <span className="network-num">{fmtKb(net.down)}</span>
+                <span className="network-unit">KB/s</span>
+              </span>
+            </div>
+          </div>
+
           <p className="muted last-update">
             {t.lastUpdate}: {lastUpdateTime}
           </p>
-          <ResourceChart history={history} showDisk={false} />
+
+          <ResourceChart history={history} showDisk={false} showGpu={showGpuChart} />
         </>
       ) : (
         <p className="empty-card">{t.waiting}</p>

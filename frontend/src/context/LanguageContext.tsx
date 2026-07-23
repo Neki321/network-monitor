@@ -60,6 +60,12 @@ const translations = {
     gpu: "GPU",
     temp: "Темп",
     renameNode: "Нова назва вузла",
+    saveAlias: "Зберегти назву",
+    netUpload: "Віддача",
+    netDownload: "Завантаження",
+    netThroughput: "Швидкість мережі",
+    avgGpu: "Сер. GPU",
+    maxGpu: "Макс. GPU",
   },
   EN: {
     title: "Network monitor",
@@ -111,6 +117,12 @@ const translations = {
     gpu: "GPU",
     temp: "Temp",
     renameNode: "New node display name",
+    saveAlias: "Save name",
+    netUpload: "Upload",
+    netDownload: "Download",
+    netThroughput: "Network",
+    avgGpu: "Avg GPU",
+    maxGpu: "Max GPU",
   },
 } as const;
 

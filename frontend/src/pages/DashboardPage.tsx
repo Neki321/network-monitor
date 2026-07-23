@@ -197,6 +197,7 @@ export function DashboardPage({
                   <th>{t.cpu}</th>
                   <th>{t.ram}</th>
                   <th>{t.disk}</th>
+                  <th>{t.gpu}</th>
                   <th>{t.lastUpdate}</th>
                 </tr>
               </thead>
@@ -216,11 +217,31 @@ export function DashboardPage({
                       <td className={reading ? `metric-${getMetricLevel(reading.disk)}` : ""}>
                         {reading ? `${Math.round(reading.disk)}%` : "--"}
                       </td>
+                      <td
+                        className={
+                          reading &&
+                          reading.gpu !== null &&
+                          reading.gpu !== undefined &&
+                          Number.isFinite(reading.gpu)
+                            ? `metric-${getMetricLevel(reading.gpu)}`
+                            : ""
+                        }
+                      >
+                        {reading &&
+                        reading.gpu !== null &&
+                        reading.gpu !== undefined &&
+                        Number.isFinite(reading.gpu)
+                          ? `${Math.round(reading.gpu)}%`
+                          : "--"}
+                      </td>
                       <td>
                         {reading
-                          ? new Date(reading.timestamp).toLocaleTimeString("uk-UA", {
-                              hour12: false,
-                            })
+                          ? new Date(reading.timestamp).toLocaleTimeString(
+                              language === "UA" ? "uk-UA" : "en-GB",
+                              {
+                                hour12: false,
+                              }
+                            )
                           : "--:--:--"}
                       </td>
                     </tr>

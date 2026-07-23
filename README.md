@@ -148,7 +148,6 @@ Possible next steps for the project:
 - Docker support
 - better filtering and analytics
 - deployment to a public server
-<img width="1280" height="630" alt="image" src="https://github.com/user-attachments/assets/86d15cb6-de87-456c-958a-66458b822bc6" />
 
 ## License
 

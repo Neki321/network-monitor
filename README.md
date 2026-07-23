@@ -1,4 +1,4 @@
-git add README.md# Network Monitor
+# Network Monitor
 
 A simple distributed system for monitoring computer resource usage in real time.  
 This project was created as a Bachelor's thesis and shows how multiple computers can send their hardware metrics to one central server, where the data is displayed in a web dashboard.
